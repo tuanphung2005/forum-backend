@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  fullName  String
+  role      UserRole @default(STUDENT)
+  isActive  Boolean  @default(true)
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  posts        Post[]
+  comments     Comment[]
+  postVotes    PostVote[]
+  commentVotes CommentVote[]
+
+  @@map("users")
+}
+
+model Post {
+  id         String   @id @default(cuid())
+  title      String
+  content    String   @db.Text
+  tags       Json     // Array of strings stored as JSON
+  authorId   String
+  authorName String   // Denormalized for easier queries
+  authorRole UserRole // Denormalized for easier queries
+  voteCount  Int      @default(0) // Computed field for performance (renamed from votes)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments     Comment[]
+  postVotes    PostVote[]
+
+  // Indexes for better search performance
+  @@index([title])
+  @@index([createdAt])
+  @@index([voteCount])
+  @@index([authorId])
+  @@map("posts")
+}
+
+model Comment {
+  id              String   @id @default(cuid())
+  content         String   @db.Text
+  postId          String
+  authorId        String
+  authorName      String   // Denormalized for easier queries
+  authorRole      UserRole // Denormalized for easier queries
+  parentCommentId String?  // For nested comments/replies
+  voteCount       Int      @default(0) // Computed field for performance (renamed from votes)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  post          Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author        User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment Comment?      @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies       Comment[]     @relation("CommentReplies")
+  commentVotes  CommentVote[]
+
+  // Indexes for better performance
+  @@index([postId])
+  @@index([createdAt])
+  @@index([voteCount])
+  @@index([authorId])
+  @@map("comments")
+}
+
+model PostVote {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  type      VoteType
+  createdAt DateTime @default(now())
+
+  // Relations
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("post_votes")
+}
+
+model CommentVote {
+  id        String   @id @default(cuid())
+  commentId String
+  userId    String
+  type      VoteType
+  createdAt DateTime @default(now())
+
+  // Relations
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId])
+  @@map("comment_votes")
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum VoteType {
+  UPVOTE
+  DOWNVOTE
+}
